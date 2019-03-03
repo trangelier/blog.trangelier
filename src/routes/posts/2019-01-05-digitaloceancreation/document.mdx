@@ -1,0 +1,166 @@
+import styles from './document.module.css';
+import digitalOceanLogo from './DigitalOcean_logo.svg';
+import nginxLogo from './Nginx_logo.svg';
+import googleLogo from './Google_G_Logo.svg';
+import nodeJSLogo from './Node.js_logo.svg';
+
+<div className={styles['container']}>
+	<img src={googleLogo} alt="logo" />
+	<img src={nginxLogo} alt="logo" />
+	<img src={digitalOceanLogo} alt="logo" />
+	<img src={nodeJSLogo} alt="logo" />
+</div>
+
+## Introduction
+
+This post will cover how I created my Digital Ocean server, added my domain from Google Domain, configured a Reverse Proxy Nginx server, and setup NodeJS. This is also where this blog is hosted! I will go over all the steps that I took to get a Hello World NodeJS Application running. I might write up a guide on how I deploy this blog as well.
+
+### Google Domain
+
+First thing you want to do is tell your Google Domain about your droplet. I'm going to assume you already have a domain purchased from [Google Domains](https://domains.google.com).
+
+First Navigate to [Google Domains](https://domains.google.com), click the sidebar and click the entry `DNS`.
+
+At the bottom of that page, under `Custom Resource Methods` add two entries.
+
+```
+@ A 1h YOUR_DIGITAL_OCEAN_IP_ADDRESS
+www CNAME 1h YOUR_DOMAIN_NAME
+```
+
+Google Domains does give you seperate fields for each of the options listed above, so make sure to use those.
+
+This can take time to propigate to DNS servers around the world. You can check your domians status by using [DNS Checker](https://dnschecker.org/).
+
+### Digital Ocean
+
+One change is required to your droplet, if you don't have a droplet yet and stumbled on this blog checkout [Digital Ocean's Documentation](https://www.digitalocean.com/docs/), it's amazing.
+
+Once logged in:
+
+1. Click the `Create` button on top of the navigation bar
+2. Click `Domains/DNS`
+3. Enter your domain name and attach it to your droplet
+
+All done with the Digital Ocean configuration.
+
+### Nginx
+
+In this step, we will install Nginx to our server, install a program called [Certbot](https://certbot.eff.org/) which will handle all the SSL configurations for us leveraging [LetsEncrpyt](https://letsencrypt.org/).
+
+```bash
+# Install Nginx
+sudo dnf install nginx
+# start Nginx on server reboot
+sudo systemctl enable nginx.service
+# start Nginx
+systemctl start nginx.service
+# Install cerbot for SSL
+sudo dnf install certbot certbot-nginx
+# Let Certbot completly configure your SSL
+sudo certbot --nginx
+# SELinux allow proxy_pass
+setsebool -P httpd_can_network_connect 1
+```
+
+To enable the proxy pass, edit your config file at `/etc/nginx/nginx.conf` and add the following above the `server` block created by certbot:
+
+```nginx
+# the IP(s) on which your node server is running. I chose port 8080.
+upstream app_yourdomain {
+    server 127.0.0.1:8080;
+    keepalive 8;
+}
+```
+
+Also, add this into the `server` block that certbot created. Create or replace the existing `location` block with this:
+
+```nginx
+    # pass the request to the node.js server with the correct headers
+    # and much more can be added, see nginx config options
+    location / {
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header Host $http_host;
+      proxy_set_header X-NginX-Proxy true;
+      # If you want Nginx to handle websockets as well, uncomment the following:
+      #proxy_http_version 1.1;
+      #proxy_set_header Upgrade $http_upgrade;
+      #proxy_set_header Connection "upgrade";
+
+      proxy_pass http://app_yourdomain/;
+      proxy_redirect off;
+    }
+```
+
+Finally, restart Nginx:
+
+```
+nginx systemctl restart nginx
+```
+
+### NVM = NodeJS & NPM
+
+Now that we have Nginx looking for a NodeJS Server running on port 8080 let's install [Node Version Manager](https://github.com/creationix/nvm) which will allow us to install any version of NodeJS we want. I generally install the latest stable release unless my project has specific requirements.
+
+```bash
+
+curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.34.0/install.sh | bash
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+# Install the Latest Stable Release and use it
+nvm install --lts
+nvm use --lts
+```
+
+### Test NodeJS Application
+
+Now that we have NVM installed, which installed NodeJS and NPM for us, we have a Reverse Proxy Nginx Server ready to talk to an application running on port 8080, lets give it one!
+
+First, create a new folder for our test.
+
+```bash
+mkdir test && cd test
+```
+
+Now lets create a simple NodeJS Server Application that simply returns Hello World. I always use vim, but feel free to use your own editor:
+
+```bash
+vim hello.js
+```
+
+Paste the following into the file:
+
+```js
+var http = require('http');
+http.createServer(function(req, res) {
+	res.writeHead(200, { 'Content-Type': 'text/plain' });
+	res.end('Hello World\n');
+}).listen(8080, 'APP_PRIVATE_IP_ADDRESS');
+console.log('Server running at http://APP_PRIVATE_IP_ADDRESS:8080/');
+```
+
+Be sure to replace APP_PRIVATE_IP_ADDRESS with your Digital Ocean's IP Address.
+
+Quick detour:
+
+Now we will install PM2, which is a process manager for Node.js applications. PM2 provides an easy way to manage and daemonize applications (run them as a service).
+
+```bash
+npm install pm2@latest -g
+# Configure PM2 on startup
+pm2 startup systemd
+```
+
+After running `pm2 startup systemd` you should see the console give you a command to run, please run that command as it finalizes the startup of pm2.
+
+Finally:
+
+Now that we have PM2 installed, we can finally start our test application:
+
+```bash
+pm2 start hello.js
+```
+
+Finally go to your domain and you should see Hello World!!
