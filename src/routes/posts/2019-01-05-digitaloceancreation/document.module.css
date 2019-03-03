@@ -10,9 +10,9 @@
 .container {
   display: flex;
   align-items: center;
-  width: 18vw;
+  width: 25%;
   /*customize to your needs 100%*/
-  height: 18vw;
+  height: 25%;
   /*customize to your needs*/
 }
 
