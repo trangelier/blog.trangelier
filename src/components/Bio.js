@@ -22,7 +22,8 @@ function Bio(props) {
 				<a href="/tags/nodejs">NodeJS</a>, <a href="/tags/sql">SQL</a>,{' '}
 				<a href="/tags/plsql">PL/SQL</a>, some{' '}
 				<a href="/tags/systems">systems development</a>, and a little
-				<a href="/tags/react"> React</a>.
+				<a href="/tags/react"> React</a>. To see all my work, visit my{' '}
+				<a href="https://github.com/trangelier/">GitHub Profile.</a>
 			</p>
 		</div>
 	);
